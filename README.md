@@ -161,6 +161,24 @@ Tested workflow:
 
 `Kaspi Statement → AI Analysis → Human Approval → 1C Draft → Duplicate Check`
 
+## Working Prototype
+
+### AI Transaction Analysis
+
+QazLedger AI analyzes bank statement transactions directly inside 1C and shows the proposed accounting decision, rule, confidence score and explanation.
+
+![QazLedger AI transaction analysis](screenshots/ai-analysis.jpg)
+
+### 1C Draft Creation
+
+After accountant approval, QazLedger AI creates an unposted 1C accounting document.
+
+Example: transfer between the company's own bank accounts from Alatau City Bank to Kaspi Bank.
+
+![QazLedger AI 1C internal transfer](screenshots/internal-transfer.jpg)
+
+The accountant remains in control and manually verifies the draft before posting.
+
 ## Project Structure
 
 ```text
@@ -171,5 +189,8 @@ Tested workflow:
 │   ├── README.md
 │   ├── ASIQ_Kaspi_1C_v1.5.0_OWN_TRANSFER_DIRECTION.txt
 │   └── ASIQ_Kaspi_QazLedgerAI_CREATE_SELECTED_FULL.txt
+├── screenshots/
+│   ├── ai-analysis.jpg
+│   └── internal-transfer.jpg
 ├── .gitignore
 └── README.md
