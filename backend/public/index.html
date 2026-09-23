@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QazLedger MoneyGraph</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f5f6f8;margin:0;color:#111}
+header{background:#111827;color:#fff;padding:20px 28px}
+main{max-width:1100px;margin:20px auto;padding:0 16px}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:16px;margin-bottom:16px}
+textarea{width:100%;min-height:170px;box-sizing:border-box;padding:12px;border:1px solid #d1d5db;border-radius:10px;font-family:Consolas,monospace}
+button{padding:11px 15px;border:0;border-radius:10px;font-weight:700;cursor:pointer;margin-right:8px}
+.primary{background:#111827;color:#fff}.secondary{background:#e5e7eb}
+#graph{width:100%;height:360px;border:1px dashed #d1d5db;border-radius:12px;background:#fafafa}
+table{width:100%;border-collapse:collapse}th,td{padding:9px;border-bottom:1px solid #eee;text-align:left}
+.risk-high{color:#b91c1c;font-weight:700}.risk-med{color:#b45309;font-weight:700}.risk-low{color:#047857;font-weight:700}
+pre{white-space:pre-wrap;line-height:1.45}
+.stats{display:flex;gap:10px;flex-wrap:wrap}.stat{background:#f3f4f6;padding:10px 14px;border-radius:10px}
+</style>
+</head>
+<body>
+<header><h1 style="margin:0">QazLedger MoneyGraph</h1><div>AML-анализ транзакционной сети • HackAlem AI</div></header>
+<main>
+<div class="card">
+<h2>Транзакции</h2>
+<textarea id="input"></textarea><br><br>
+<button class="secondary" onclick="loadDemo()">Демо-данные</button>
+<button class="primary" onclick="run()">Анализировать</button>
+<div id="status" style="margin-top:10px;color:#6b7280"></div>
+</div>
+
+<div class="card"><h2>Сводка</h2><div id="stats" class="stats"></div></div>
+
+<div class="card"><h2>Граф</h2><svg id="graph" viewBox="0 0 1000 360"></svg></div>
+
+<div class="card"><h2>Top Risk</h2><div id="risk"></div></div>
+
+<div class="card"><h2>AI Summary</h2><pre id="summary">—</pre></div>
+</main>
+
+<script>
+const demo=[
+ {from:"A001",to:"B001",amount:100000,date:"2026-09-20"},
+ {from:"A002",to:"B001",amount:150000,date:"2026-09-20"},
+ {from:"A003",to:"B001",amount:120000,date:"2026-09-21"},
+ {from:"B001",to:"C001",amount:340000,date:"2026-09-21"}
+];
+function loadDemo(){document.getElementById("input").value=JSON.stringify(demo,null,2)}
+function cls(v){return v>=60?"risk-high":v>=30?"risk-med":"risk-low"}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]))}
+function draw(data){
+ const svg=document.getElementById("graph");
+ const nodes=data.nodes;
+ const pos={};
+ const n=nodes.length;
+ nodes.forEach((x,i)=>{pos[x.id]={x:100+i*(800/Math.max(n-1,1)),y:180}});
+ if(pos["B001"]) pos["B001"]={x:500,y:180};
+ if(pos["C001"]) pos["C001"]={x:800,y:180};
+ ["A001","A002","A003"].forEach((id,i)=>{if(pos[id])pos[id]={x:170,y:80+i*100}});
+ let h="";
+ data.edges.forEach(e=>{
+   if(!pos[e.from]||!pos[e.to])return;
+   h+=`<line x1="${pos[e.from].x}" y1="${pos[e.from].y}" x2="${pos[e.to].x}" y2="${pos[e.to].y}" stroke="#9ca3af" stroke-width="3"/>`;
+ });
+ nodes.forEach(x=>{
+   const p=pos[x.id], c=x.risk_score>=60?"#b91c1c":x.risk_score>=30?"#b45309":"#047857";
+   h+=`<circle cx="${p.x}" cy="${p.y}" r="45" fill="white" stroke="${c}" stroke-width="5"/>`;
+   h+=`<text x="${p.x}" y="${p.y-8}" text-anchor="middle" font-size="15" font-weight="700">${esc(x.id)}</text>`;
+   h+=`<text x="${p.x}" y="${p.y+12}" text-anchor="middle" font-size="12">${esc(x.role)}</text>`;
+   h+=`<text x="${p.x}" y="${p.y+29}" text-anchor="middle" font-size="12">Risk ${x.risk_score}</text>`;
+ });
+ svg.innerHTML=h;
+}
+async function run(){
+ try{
+  const transactions=JSON.parse(document.getElementById("input").value);
+  document.getElementById("status").textContent="Анализ...";
+  const r=await fetch("/api/moneygraph",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({transactions})});
+  const data=await r.json(); if(!r.ok) throw new Error(data.details||data.error||"Ошибка");
+  document.getElementById("stats").innerHTML=
+   `<div class="stat">Транзакции: <b>${data.stats.transactions}</b></div><div class="stat">Узлы: <b>${data.stats.nodes}</b></div><div class="stat">High risk: <b>${data.nodes.filter(x=>x.risk_score>=60).length}</b></div>`;
+  draw(data);
+  document.getElementById("risk").innerHTML=`<table><tr><th>Узел</th><th>Роль</th><th>Risk</th><th>Вход</th><th>Выход</th></tr>`+
+   data.top_risk.map(x=>`<tr><td><b>${esc(x.id)}</b></td><td>${esc(x.role)}</td><td class="${cls(x.risk_score)}">${x.risk_score}</td><td>${x.incoming_amount}</td><td>${x.outgoing_amount}</td></tr>`).join("")+`</table>`;
+  document.getElementById("summary").textContent=data.ai_summary||"AI summary отсутствует";
+  document.getElementById("status").textContent="Готово";
+ }catch(e){document.getElementById("status").textContent="Ошибка: "+e.message}
+}
+loadDemo();
+</script>
+</body></html>
